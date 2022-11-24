@@ -89,9 +89,9 @@ Issue: **{title}**\n
         yield Input(placeholder="Add optional skipcq message.")
         yield Container(
             Horizontal(
-                Button("Looks legit!", id="valid", variant="success"),
-                Button("Non-issue", id="invalid", variant="error"),
-                Button("I am done!", id="fin", variant="success"),
+                Button("Valid issue!", id="valid", variant="success"),
+                Button("Suppress it", id="invalid", variant="error"),
+                Button("Finish Audit!", id="fin", variant="success"),
                 classes="buttons",
             ),
             id="buttons-container"
@@ -150,7 +150,7 @@ Issue: **{title}**\n
 
         if button_id == "fin":
             self.do_suppress()
-            sys.exit(0)
+            exit()
 
         if button_id == "invalid":
             skipcq_msg = self.query_one(Input).value
