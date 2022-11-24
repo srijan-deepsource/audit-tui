@@ -1,0 +1,40 @@
+Input {
+    margin: 1 5 2 5;
+}
+
+Button {
+    content-align: center middle;
+    margin: 0 5 8 5;
+}
+
+
+#results-container {
+    background: $background 30%;
+    margin: 10 5 2 5;
+    height: 50%;
+    overflow: hidden auto;
+    border: tall $background;
+    color: green;
+}
+
+#buttons-container {
+    height: 10%;
+    overflow: hidden auto;
+    margin: 0 0 0 1;
+}
+
+#results-container:focus {
+    border: tall $accent;
+}
+
+Auditor {
+    width: 50%;
+    content-align: center middle;
+    align: center top;
+}
+
+AuditorApp {
+
+    content-align: center middle;
+    align: center middle;
+}
