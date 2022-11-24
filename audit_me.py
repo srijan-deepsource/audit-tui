@@ -1,5 +1,6 @@
 from collections import defaultdict
-from rich.syntax import Syntax
+import sys
+import json
 from textwrap import indent
 from rich.markdown import Markdown
 from textual.app import App, ComposeResult
@@ -17,23 +18,36 @@ EXTENSION_MAP = {
     "php": "// skipcq",
 }
 
+json_path = sys.argv[1]
+
+def prepare_db():
+    with open(json_path) as fp:
+        data = json.load(fp)
+    db = []
+    for issue in data:
+        shortcode = issue["issue"]["code"]
+        title = issue["issue"]["title"]
+        if not title.split(":")[0].lower().startswith("audit"):
+            continue
+        filepath = issue["path"]
+        start_line = issue["beginLine"]
+        end_line = issue["endLine"]
+
+        db.append((filepath, start_line, end_line, shortcode, title))
+
+    return tuple(db)
 
 class Auditor(Static):
     """A Textual app to triage Audit issues."""
 
     skipcq_map = defaultdict(lambda: defaultdict(dict))
-    current_file_pos = None
+    skipcq_data = None
 
-    db = (
-        ("/Users/sauravsrijan/work/hackathon/app.py", 8, 8, "This is a random message"),
-        ("/Users/sauravsrijan/work/hackathon/app.py", 19, 19, "This is another random message"),
-        ("/Users/sauravsrijan/work/hackathon/app.py", 26, 27, "This is yet another random message"),
-        ("/Users/sauravsrijan/work/hackathon/app.py", 33, 33, "oh come on!"),
-    )
+    db = prepare_db()
 
     iter_db = iter(db)
 
-    def render_markdown(self, filepath, startline, endline):
+    def render_markdown(self, filepath, startline, endline, shortcode, title):
         """Read a file, and render the markdown."""
         with open(filepath) as fp:
             lines = fp.readlines()
@@ -58,7 +72,9 @@ class Auditor(Static):
         code_lines = indent(''.join(_lines), '    ')
 
         output = f"""
-File: **{filepath}**
+File: **{filepath}**\n
+Issue Code: **{shortcode}**\n
+Issue: **{title}**\n
 
 ---
 
@@ -80,16 +96,16 @@ File: **{filepath}**
             ),
             id="buttons-container"
         )
-        # yield Button("Looks legit!", id="valid", variant="success")
-        # yield Button("Non-issue", id="invalid", variant="error")
-        # yield Button("I am done!", id="fin", variant="success")
 
     def on_mount(self) -> None:
         """Event handler called when widget is added to the app."""
-        file, line, col, _desc = next(self.iter_db)
-        message = self.render_markdown(file, line, col)
-        self.current_file_pos = (file, line)
-        self.query_one("#results", Static).update(Markdown(message))
+        try:
+            file, start_line, end_line, shortcode, title = next(self.iter_db)
+            message = self.render_markdown(file, start_line, end_line, shortcode, title)
+            self.skipcq_data = (file, start_line, shortcode)
+            self.query_one("#results", Static).update(Markdown(message))
+        except StopIteration:
+            self.query_one("#results", Static).update("Nothing to Audit!")
 
     @staticmethod
     def get_comment_prefix(filepath):
@@ -104,7 +120,7 @@ File: **{filepath}**
             suffix = "\n"
             with open(filepath) as fp:
                 lines = fp.readlines()
-            for lno, msg in sorted(data.items(), reverse=True):
+            for lno, (shortcode, msg) in sorted(data.items(), reverse=True):
                 # get the index of line number
                 line_index = lno - 1
                 # get indentation for line:
@@ -117,9 +133,9 @@ File: **{filepath}**
                 # insert position of skipcq is 1 line above.
                 skipcq_index = line_index - 1
                 if msg:
-                    msg = prefix + ": " + msg
+                    msg = prefix + f": {shortcode} ({msg})"
                 else:
-                    msg = prefix
+                    msg = prefix + f": {shortcode}"
                 skip_msg = prefix_spaces + msg + suffix
 
                 lines.insert(skipcq_index, skip_msg)
@@ -134,19 +150,19 @@ File: **{filepath}**
 
         if button_id == "fin":
             self.do_suppress()
-            exit()
+            sys.exit(0)
 
         if button_id == "invalid":
             skipcq_msg = self.query_one(Input).value
             if not skipcq_msg:
                 skipcq_msg = ''
-            file, line = self.current_file_pos
-            self.skipcq_map[file][line] = skipcq_msg
+            file, line, shortcode = self.skipcq_data
+            self.skipcq_map[file][line] = (shortcode, skipcq_msg)
 
         try:
-            file, line, col, _desc = next(self.iter_db)
-            message = self.render_markdown(file, line, col)
-            self.current_file_pos = (file, line)
+            file, start_line, end_line, shortcode, title = next(self.iter_db)
+            message = self.render_markdown(file, start_line, end_line, shortcode, title)
+            self.skipcq_data = (file, start_line, shortcode)
             self.query_one("#results", Static).update(Markdown(message))
         except StopIteration:
             self.query_one("#results", Static).update("Audit Complete!")
@@ -156,17 +172,11 @@ File: **{filepath}**
 class AuditorApp(App):
     """A Textual app to triage Audit issues."""
 
-    BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
     CSS_PATH = "audit_me.css"
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Auditor()
-
-    def action_toggle_dark(self) -> None:
-        """An action to toggle dark mode."""
-        # self.dark = not self.dark
-        yield Button(self.query_one(Input).value)
 
 if __name__ == "__main__":
     app = AuditorApp()

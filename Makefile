@@ -1,2 +1,2 @@
 prepare-tui:
-	pip install textual
+	pip install "textual[dev]"
